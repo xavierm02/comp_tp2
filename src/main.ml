@@ -11,7 +11,7 @@ let create_pass_manager the_execution_engine =
 
   (* Set up the optimizer pipeline.  Start with registering info about how the
    * target lays out data structures. *)
-  Llvm_target.DataLayout.add (Llvm_executionengine.ExecutionEngine.target_data the_execution_engine) the_pm;
+  Llvm_target.TargetData.add (Llvm_executionengine.ExecutionEngine.target_data the_execution_engine) the_pm;
 
   (* Promote allocas to registers. *)
   Llvm_scalar_opts.add_memory_to_register_promotion the_pm;
@@ -27,7 +27,7 @@ let create_pass_manager the_execution_engine =
 
   (* Simplify the control flow graph (deleting unreachable blocks, etc). *)
   Llvm_scalar_opts.add_cfg_simplification the_pm;
-  
+
   the_pm
 
 
