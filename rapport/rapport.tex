@@ -1,0 +1,52 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[francais]{babel}
+\usepackage[utf8]{inputenc} %utf8
+\usepackage[T1]{fontenc}
+%\usepackage{mathaccent}
+\begin{document}
+
+\title{Compilateur VSL+ - OCaml/LLVM}
+\author{Montillet Xavier \and Hérouard Clément}
+
+\maketitle
+
+\section{Introduction}
+La compilation est une étape souvent nécessaire à l'exécution d'un code écrit dans un langage de programmation quelconque. Pour cela, les compilateurs effectuent plusieurs étapes pour traduire un code d'un langage vers un autre. La plupart du temps, entre un langage de programmation et un langage machine, un compilateur produit un code dans un langage dit intermédiaire. Nous allons ici réaliser un compilateur d'un langage simple vers un langage intermédiaire.
+
+Ce projet nous a mené à réaliser la compilation du langage VSL+ (Very Simple Language +)vers un langage intermédiaire. Le langage VSL+ est un langage simple utilisé pour l'éducation. Pour réaliser sa compilation, nous avons réalisé un code en Ocaml en s'aidant des librairies LLVM.
+ 
+\section{Travail réalisé}
+
+Nous sommes partis du code fourni en début de projet. Ce code contenait un parseur qui, à partir d'un code écrit en VSL+, fournit un arbre de syntaxe abstrait, ou AST, de notre code. Le reste du code nous permet de compiler une petite partie du langage, c'est à dire les expression simple.
+
+Nous avons ensuite ajouter peut à peu d'autre structure à une petite série de test entre chaque ajout, en suivant le plan proposé par le sujet. Nous allons suivre chacune de ces étapes.
+
+\section{Probl\`emes rencontr\'es}
+
+\subsection{Les blocs}
+
+La gestion de bloc semble assez simple. Il suffit d'utiliser les fonctions  $open \_ scope$ et $close \_ scope$. Mais nous n'avons pas r\'eussi \`a utiliser les fonctions $create\_entry\_block\_alloca$ et $create\_entry\_block\_array\_alloca$ (ou, plus pr\'esic\'ement, plus rien ne marchait quand on les utilisait). Nous avons donc ajout\'e une variable globale qui contient un builder pour \'ecrire dans les d\'eclarations de variables au d\'ebut de la fonction et nous mettons \`a jour ce builder \`a chaque entr\'ee dans une fonction.
+
+\subsection{While}
+
+Nous avions dans un premier temps mal compris le fonctionnement de $gen\_expression$ et avions donc cr\'e\'e la valeur au tout debut du code et utilis\'ee lorsque l'on \'ecrivait le corps. Nous avons donc eu un bug : la condition n'\'etait \'evalu\'ee qu'une fois. Le code testant le WHILE dans le level 1 ne comprenant qu'un return, nous n'avons d\'etect\'e ce bug que sur l'exemple utilisant le WHILE et les tableaux du level 3 et avons donc longuement cherch\'e la source de la Segmentation fault dans les tableaux avant de remettre en cause notre impl\'ementation du WHILE. 
+
+\subsection{Les types} 
+
+Le seul bug a \'et\'e du \`a la v\'erification de type. Nous pensions qu'une $llvalue$ cr\'e\'ee avec une fonction prenant un $lltype$ en argument permettrait de r\'ecup\'erer le $lltype$ via $type\_of$. Or $type\_of$ retourne le type pointeur correspondant au type.
+
+\subsection{Autres}
+
+Le test $tests/testlevel4/level4testfact.vsl$ fait une Segmentation fault \`a la compilation pour une raison inconnue.
+
+\section{Conclusion}
+
+Notre compilateur gère les fonctionnalités du langage VSL+ souhaités et passe presque tous les tests.
+
+Ce projet nous à permit de nous confronter à la génération automatique de code. 
+Néanmoins ce projet ne nous fait réaliser qu'une partie d'un vrai compilateur. Nous aurions pu par exemple nous intéresser à l'optimisation du code compilé à l'aide des méthodes vues en cours.
+
+De plus, nous avons pu nous familiariser avec les méthode du développement agile. En effet, chaque amélioration du code a peu conséquentes et a été entrecoupé d'une petite partie de tests.
+
+\end{document}

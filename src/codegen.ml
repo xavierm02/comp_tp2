@@ -54,11 +54,11 @@ let func_scanf =
 (* Create an alloca instruction in the entry block of the
 function. This is used for mutable local variables. *)
 
-let create_entry_block_alloca_2 the_function var_name typ =
+let create_entry_block_alloca the_function var_name typ =
   let builder = Llvm.builder_at context (Llvm.instr_begin (Llvm.entry_block the_function)) in
   Llvm.build_alloca typ var_name builder
 
-let create_entry_block_array_alloca_2 the_function var_name typ size =
+let create_entry_block_array_alloca the_function var_name typ size =
   let builder = Llvm.builder_at context (Llvm.instr_begin (Llvm.entry_block the_function)) in
   let vsize = Llvm.const_int int_type size in
   Llvm.build_array_alloca typ vsize var_name builder
@@ -110,7 +110,7 @@ let rec gen_expression : expression -> Llvm.llvalue = function
       let args = Array.map gen_expression _args in
       Llvm.build_call callee args "call_tmp" builder
 
-let value_of_lhs = function (* TODO types *)
+let value_of_lhs = function
   | LHS_Ident id ->
     let value = SymbolTableList.lookup id in (* TODO error message *)
     let typ = Llvm.type_of value in
@@ -173,7 +173,6 @@ let rec gen_statement : statement -> unit = function
           | None -> failwith "This should not happen... Trying to generate a block statement outside of a function..."
           | Some b -> b
         in
-
         match declaration with
           | Dec_Ident id -> id, Llvm.build_alloca int_type id new_builder
           | Dec_Array (id, n) -> id, Llvm.build_array_alloca int_type (const_int n) id new_builder
