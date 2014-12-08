@@ -54,16 +54,18 @@ let func_scanf =
 (* Create an alloca instruction in the entry block of the
 function. This is used for mutable local variables. *)
 
-let create_entry_block_alloca the_function var_name typ =
+let create_entry_block_alloca_2 the_function var_name typ =
   let builder = Llvm.builder_at context (Llvm.instr_begin (Llvm.entry_block the_function)) in
   Llvm.build_alloca typ var_name builder
 
-let create_entry_block_array_alloca the_function var_name typ size =
+let create_entry_block_array_alloca_2 the_function var_name typ size =
   let builder = Llvm.builder_at context (Llvm.instr_begin (Llvm.entry_block the_function)) in
   let vsize = Llvm.const_int int_type size in
   Llvm.build_array_alloca typ vsize var_name builder
 
 (* generation of code for each VSL+ construct *)
+
+let current_function_builder = ref None
 
 let rec gen_expression : expression -> Llvm.llvalue = function
   | Const n -> const_int n
@@ -166,9 +168,15 @@ let rec gen_statement : statement -> unit = function
     SymbolTableList.open_scope ();
     List.iter (fun declaration ->
       let id, value =
+        let new_builder =
+          match !current_function_builder with
+          | None -> failwith "This should not happen... Trying to generate a block statement outside of a function..."
+          | Some b -> b
+        in
+
         match declaration with
-          | Dec_Ident id -> id, Llvm.build_alloca int_type id builder
-          | Dec_Array (id, n) -> id, Llvm.build_array_alloca int_type (const_int n) id builder
+          | Dec_Ident id -> id, Llvm.build_alloca int_type id new_builder
+          | Dec_Array (id, n) -> id, Llvm.build_array_alloca int_type (const_int n) id new_builder
       in
       SymbolTableList.add id value
     ) declarations;
@@ -295,6 +303,7 @@ let gen_program_unit program_unit =
     for i = 0 to (Array.length params_values) - 1 do
       SymbolTableList.add params.(i) params_values.(i)
     done;
+    current_function_builder := Some (Llvm.builder_at context (Llvm.instr_begin function_bb));
     gen_statement statement;
     SymbolTableList.close_scope();
     match typ with
