@@ -89,7 +89,12 @@ let rec gen_expression : expression -> Llvm.llvalue = function
     let t1 = gen_expression e1 in
     let t2 = gen_expression e2 in
     Llvm.build_sdiv t1 t2 "sdiv_tmp" builder
-  | Expr_Ident id -> SymbolTableList.lookup id (* TODO error message *)
+  | Expr_Ident id ->
+    let value = SymbolTableList.lookup id in (* TODO error message *)
+    if Llvm.type_of value <> Llvm.pointer_type int_type then
+      raise (Error (id ^ " is not an int!"))
+    else
+      Llvm.build_load value id builder
   | ArrayElem (id, e1) -> failwith "TODO"
     (* let t1 = gen_expression e1 in
     Llvm.build_extractvalue (SymbolTableList.lookup id) t1 "extractvalue_tmp" builder *) (* TODO error message *)
@@ -98,17 +103,15 @@ let rec gen_expression : expression -> Llvm.llvalue = function
     let args = Array.map gen_expression _args in
     Llvm.build_call callee args "call_tmp" builder
 
+let value_of_lhs = function (* TODO types *)
+  | LHS_Ident id -> SymbolTableList.lookup id (* TODO error message *)
+  | LHS_ArrayElem _ -> raise TODO
+
 let rec gen_statement : statement -> unit = function
   | Assign (lhs, expr) ->
-    begin
-      let value = gen_expression expr in
-      let storage =
-        match lhs with
-        | LHS_Ident id -> SymbolTableList.lookup id (* TODO error message *)
-        | LHS_ArrayElem _ -> raise TODO
-      in
-      ignore (Llvm.build_store value storage builder)
-    end
+    let value = gen_expression expr in
+    let storage = value_of_lhs lhs in
+    ignore (Llvm.build_store value storage builder)
   | Return expr -> ignore(Llvm.build_ret (gen_expression expr) builder)
   | SCall (callee, args) -> raise TODO
   | Print items ->
@@ -124,7 +127,13 @@ let rec gen_statement : statement -> unit = function
     ) items in
     let args = Array.of_list (format_value :: items_values) in
     ignore (Llvm.build_call func_printf args "printf" builder)
-  | Read items -> raise TODO
+  | Read items ->
+      let formats = List.map (fun _ -> "%d") items in
+      let format = String.concat "" formats in
+      let format_value = const_string format in
+      let items_values = List.map value_of_lhs items in
+      let args = Array.of_list (format_value :: items_values) in
+      ignore (Llvm.build_call func_scanf args "scanf" builder)
   | Block (declarations, statements) ->
     SymbolTableList.open_scope ();
     List.iter (fun declaration ->
@@ -233,9 +242,9 @@ let gen_program_unit program_unit =
   let function_value =
     try
       let value = SymbolTableList.lookup id in
-      let previous_function_type_string = Llvm.string_of_lltype (Llvm.type_of value) in
-      let new_function_type_string = Llvm.string_of_lltype function_type ^ "*" in (* I don't know why the "*" is needed here, but it is *)
-      if previous_function_type_string <> new_function_type_string then
+      if function_type <> Llvm.element_type (Llvm.type_of value) then
+        let previous_function_type_string = Llvm.string_of_lltype (Llvm.element_type (Llvm.type_of value)) in
+        let new_function_type_string = Llvm.string_of_lltype function_type in
         raise (Error ("The function " ^ id ^ " has previously been declared with type "
         ^ previous_function_type_string ^ " and is being redeclared with incompatible type "
         ^ new_function_type_string ^ "!"))
