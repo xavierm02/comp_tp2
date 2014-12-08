@@ -202,15 +202,19 @@ let gen_program_unit program_unit =
     | Type_Void -> void_type
   in
   let params_types = Array.map (fun _ -> int_type) params in
-  let function_type = Llvm.var_arg_function_type return_type params_types in
+  let function_type = Llvm.function_type return_type params_types in
   (* if already defined, check that types are equal *)
   let function_value =
     try
       let value = SymbolTableList.lookup id in
-      if Llvm.type_of value <> function_type then
-        raise TODO
+      let previous_function_type_string = Llvm.string_of_lltype (Llvm.type_of value) in
+      let new_function_type_string = Llvm.string_of_lltype function_type ^ "*" in (* I don't know why the "*" is needed here, but it is *)
+      if previous_function_type_string <> new_function_type_string then
+        raise (Error ("The function " ^ id ^ " has previously been declared with type "
+        ^ previous_function_type_string ^ " and is being redeclared with incompatible type "
+        ^ new_function_type_string ^ "!"))
       else if Array.length (Llvm.basic_blocks value) <> 0 then
-        raise TODO
+        raise (Error ("The function " ^ id ^ " is already defined!"))
       else
         value
     with
