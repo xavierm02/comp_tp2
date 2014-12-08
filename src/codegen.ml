@@ -66,18 +66,12 @@ let create_entry_block_array_alloca the_function var_name typ size =
 (* generation of code for each VSL+ construct *)
 
 let rec gen_expression : expression -> Llvm.llvalue = function
-  | Const n ->
-    (* returns a constant llvalue for that integer *)
-    const_int n
+  | Const n -> const_int n
   | Plus (e1,e2) ->
-    (* generates the code for [e1] and returns the result llvalue *)
     let t1 = gen_expression e1 in
-    (* the same for e2 *)
     let t2 = gen_expression e2 in
-    (* appends an 'add' instruction and returns the result llvalue *)
     Llvm.build_add t1 t2 "add_tmp" builder
-  (* TODO NAT? *)
-  | Minus (e1, e2) ->
+  | Minus (e1, e2) -> (* TODO NAT? *)
     let t1 = gen_expression e1 in
     let t2 = gen_expression e2 in
     Llvm.build_sub t1 t2 "sub_tmp" builder
@@ -98,9 +92,11 @@ let rec gen_expression : expression -> Llvm.llvalue = function
       Llvm.build_load value id builder
     else
       raise (Error (id ^ " is not an int!"))
-  | ArrayElem (id, e1) -> failwith "TODO ARRAY ELEMENT"
-    (* let t1 = gen_expression e1 in
-    Llvm.build_extractvalue (SymbolTableList.lookup id) t1 "extractvalue_tmp" builder *) (* TODO error message *)
+  | ArrayElem (id, expr) ->
+    let array = SymbolTableList.lookup id in (* TODO error message *)
+    let index = gen_expression expr in
+    let value = Llvm.build_gep array [|index|] id builder in
+    Llvm.build_load value id builder
   | ECall (_callee, _args) ->
     let callee = SymbolTableList.lookup _callee in (* TODO error message *)
     let return_type = Llvm.return_type (Llvm.element_type (Llvm.type_of callee)) in
@@ -113,8 +109,22 @@ let rec gen_expression : expression -> Llvm.llvalue = function
       Llvm.build_call callee args "call_tmp" builder
 
 let value_of_lhs = function (* TODO types *)
-  | LHS_Ident id -> SymbolTableList.lookup id (* TODO error message *)
-  | LHS_ArrayElem _ -> failwith "TODO ARRAY ELEMENT"
+  | LHS_Ident id ->
+    let value = SymbolTableList.lookup id in (* TODO error message *)
+    let typ = Llvm.type_of value in
+    if typ = Llvm.pointer_type int_type then
+      value
+    else
+      raise (Error (id ^ " is not an int!"))
+  | LHS_ArrayElem (id, expr) ->
+    let array = SymbolTableList.lookup id in (* TODO error message *)
+    if Llvm.type_of array <> Llvm.pointer_type int_type then (* Checking for pointer instead of array because LLVM doesn't seem to remember it's actually an array *)
+      raise (Error (id ^ " has type " ^ (Llvm.string_of_lltype (Llvm.type_of array))
+      ^ " but was expected to be of type " ^ (Llvm.string_of_lltype int_array_type)
+      ^ " = " ^ (Llvm.string_of_lltype (Llvm.pointer_type int_type)) ^ "!"))
+    else
+      let index = gen_expression expr in
+      Llvm.build_gep array [|index|] id builder
 
 let rec gen_statement : statement -> unit = function
   | Assign (lhs, expr) ->
@@ -155,13 +165,11 @@ let rec gen_statement : statement -> unit = function
   | Block (declarations, statements) ->
     SymbolTableList.open_scope ();
     List.iter (fun declaration ->
-      let id, typ =
+      let id, value =
         match declaration with
-          | Dec_Ident id -> id, int_type
-
-          | Dec_Array _ -> raise TODO
+          | Dec_Ident id -> id, Llvm.build_alloca int_type id builder
+          | Dec_Array (id, n) -> id, Llvm.build_array_alloca int_type (const_int n) id builder
       in
-      let value = Llvm.build_alloca typ id builder in
       SymbolTableList.add id value
     ) declarations;
     List.iter gen_statement statements;
@@ -214,9 +222,6 @@ let rec gen_statement : statement -> unit = function
     (* position *)
     Llvm.position_at_end merge_bb builder
   | While (_condition, statement) ->
-    (* condition *)
-    let condition = gen_expression _condition in
-    let condition_bool = Llvm.build_icmp Llvm.Icmp.Ne condition zero_int "icmp_tmp" builder in
     (* blocks *)
     let start_bb = Llvm.insertion_block builder in
     let parent_bb = Llvm.block_parent start_bb in
@@ -234,6 +239,8 @@ let rec gen_statement : statement -> unit = function
     ignore (Llvm.build_br test_bb builder);
     (* test -> body *)
     Llvm.position_at_end test_bb builder;
+    let condition = gen_expression _condition in
+    let condition_bool = Llvm.build_icmp Llvm.Icmp.Ne condition zero_int "icmp_tmp" builder in
     ignore (Llvm.build_cond_br condition_bool body_bb out_bb builder);
     (* body -> test *)
     Llvm.position_at_end body_bb_2 builder;
