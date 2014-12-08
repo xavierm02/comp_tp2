@@ -25,7 +25,7 @@ let add id v =
 let lookup id =
   let rec aux st =
     match st with
-    | [] -> failwith ("SymbolTable.lookup: unknown variable " ^ id ) 
+    | [] -> failwith ("SymbolTable.lookup: unknown variable " ^ id )
     | scope::l ->
 	try List.assoc id scope
 	with Not_found -> aux l

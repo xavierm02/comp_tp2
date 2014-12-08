@@ -113,7 +113,20 @@ let rec gen_statement : statement -> unit = function
   | SCall (callee, args) -> failwith "TODO"
   | Print items -> failwith "TODO"
   | Read items -> failwith "TODO"
-  | Block (declarations, statements) -> failwith "TODO"
+  | Block (declarations, statements) ->
+    SymbolTableList.open_scope ();
+    List.iter (fun declaration ->
+      let id, typ =
+        match declaration with
+          | Dec_Ident id -> id, int_type
+
+          | Dec_Array _ -> raise TODO
+      in
+      let value = Llvm.build_alloca typ id builder in
+      SymbolTableList.add id value
+    ) declarations;
+    List.iter gen_statement statements;
+    SymbolTableList.close_scope ();
   | If (_condition, _then_statement, _else_statement) ->
     (* condition *)
     let condition = gen_expression _condition in
@@ -122,7 +135,7 @@ let rec gen_statement : statement -> unit = function
     let start_bb = Llvm.insertion_block builder in
     let parent_bb = Llvm.block_parent start_bb in
     (* then *)
-    let then_bb = Llvm.append_block context "then" parent_bb in
+    let then_bb = Llvm.append_block context "then_bb" parent_bb in
     Llvm.position_at_end then_bb builder;
     ignore (gen_statement _then_statement);
     assert (then_bb = Llvm.insertion_block builder);
@@ -131,7 +144,7 @@ let rec gen_statement : statement -> unit = function
       | Some _else_statement' ->
         begin
           (* else *)
-          let else_bb = Llvm.append_block context "else" parent_bb in
+          let else_bb = Llvm.append_block context "else_bb" parent_bb in
           Llvm.position_at_end else_bb builder;
           ignore(gen_statement _else_statement');
           assert (else_bb = Llvm.insertion_block builder);
@@ -140,7 +153,7 @@ let rec gen_statement : statement -> unit = function
       | None -> None
     in
     (* merge *)
-    let merge_bb = Llvm.append_block context "ifcont" parent_bb in
+    let merge_bb = Llvm.append_block context "merge_bb" parent_bb in
     (* start -> then | else *)
     Llvm.position_at_end start_bb builder;
     begin
@@ -162,6 +175,52 @@ let rec gen_statement : statement -> unit = function
     (* position *)
     Llvm.position_at_end merge_bb builder
   | While (condition, statement) -> failwith "TODO"
+
+let gen_program_unit program_unit =
+  (* get proto *)
+  let (typ, id, params) =
+    match program_unit with
+    | Proto proto
+    | Function (proto, _) -> proto
+  in
+  (* build function type *)
+  let return_type =
+    match typ with
+    | Type_Int -> int_type
+    | Type_Void -> void_type
+  in
+  let params_types = Array.map (fun _ -> int_type) params in
+  let function_type = Llvm.var_arg_function_type return_type params_types in
+  (* if already defined, check that types are equal *)
+  let function_value =
+    try
+      let value = SymbolTableList.lookup id in
+      if Llvm.type_of value <> function_type then
+        raise TODO
+      else
+        value
+    with
+    | Failure _ ->
+      let value = Llvm.declare_function id function_type the_module in
+      Llvm.add_function_attr value Llvm.Attribute.Nounwind;
+      value
+  in
+  (* declare the function *)
+  match program_unit with
+  | Proto _ -> raise TODO
+
+  | Function (_, statement) ->
+    let function_bb = Llvm.append_block context "function_bb" function_value in
+    Llvm.position_at_end function_bb builder;
+    SymbolTableList.open_scope();
+    let params_values = Llvm.params function_value in
+    for i = 0 to (Array.length params_values) - 1 do
+      SymbolTableList.add params.(i) params_values.(i)
+    done;
+    gen_statement statement;
+    SymbolTableList.close_scope()
+
+let gen_program : program -> unit = List.iter gen_program_unit
 
 (* function that turns the code generated for an expression into a valid LLVM code *)
 let gen (e : expression) : unit =
