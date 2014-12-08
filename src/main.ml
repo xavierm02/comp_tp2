@@ -43,7 +43,9 @@ let main ch =
   Llvm.dump_module Codegen.the_module;
   (* optimization *)
   let _ = Llvm.PassManager.run_module Codegen.the_module the_pm in
-  Llvm.dump_module Codegen.the_module
+  if false then
+    Llvm.dump_module Codegen.the_module
+  else ()
 
 let _ =
   let ch =

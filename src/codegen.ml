@@ -109,10 +109,22 @@ let rec gen_statement : statement -> unit = function
       in
       ignore (Llvm.build_store value storage builder)
     end
-  | Return expr -> failwith "TODO"
-  | SCall (callee, args) -> failwith "TODO"
-  | Print items -> failwith "TODO"
-  | Read items -> failwith "TODO"
+  | Return expr -> ignore(Llvm.build_ret (gen_expression expr) builder)
+  | SCall (callee, args) -> raise TODO
+  | Print items ->
+    let formats = List.map (function
+      | Print_Expr _ -> "%d"
+      | Print_Text _ -> "%s"
+    ) items in
+    let format = String.concat "" formats in
+    let format_value = const_string format in
+    let items_values = List.map (function
+      | Print_Expr e -> gen_expression e
+      | Print_Text s -> const_string s
+    ) items in
+    let args = Array.of_list (format_value :: items_values) in
+    ignore (Llvm.build_call func_printf args "printf" builder)
+  | Read items -> raise TODO
   | Block (declarations, statements) ->
     SymbolTableList.open_scope ();
     List.iter (fun declaration ->
@@ -174,7 +186,7 @@ let rec gen_statement : statement -> unit = function
     end;
     (* position *)
     Llvm.position_at_end merge_bb builder
-  | While (condition, statement) -> failwith "TODO"
+  | While (condition, statement) -> raise TODO
 
 let gen_program_unit program_unit =
   (* get proto *)
@@ -197,18 +209,20 @@ let gen_program_unit program_unit =
       let value = SymbolTableList.lookup id in
       if Llvm.type_of value <> function_type then
         raise TODO
+      else if Array.length (Llvm.basic_blocks value) <> 0 then
+        raise TODO
       else
         value
     with
     | Failure _ ->
       let value = Llvm.declare_function id function_type the_module in
       Llvm.add_function_attr value Llvm.Attribute.Nounwind;
+      SymbolTableList.add id value;
       value
   in
   (* declare the function *)
   match program_unit with
-  | Proto _ -> raise TODO
-
+  | Proto _ -> ()
   | Function (_, statement) ->
     let function_bb = Llvm.append_block context "function_bb" function_value in
     Llvm.position_at_end function_bb builder;
@@ -218,9 +232,15 @@ let gen_program_unit program_unit =
       SymbolTableList.add params.(i) params_values.(i)
     done;
     gen_statement statement;
-    SymbolTableList.close_scope()
+    SymbolTableList.close_scope();
+    match typ with
+    | Type_Void -> ignore(Llvm.build_ret_void builder)
+    | _ -> ()
 
-let gen_program : program -> unit = List.iter gen_program_unit
+let gen_program program =
+  SymbolTableList.open_scope();
+  List.iter gen_program_unit program;
+  SymbolTableList.close_scope()
 
 (* function that turns the code generated for an expression into a valid LLVM code *)
 let gen (e : expression) : unit =
