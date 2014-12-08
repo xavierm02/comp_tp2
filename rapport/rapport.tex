@@ -36,9 +36,9 @@ Nous avions dans un premier temps mal compris le fonctionnement de $gen\_express
 
 Le seul bug a \'et\'e du \`a la v\'erification de type. Nous pensions qu'une $llvalue$ cr\'e\'ee avec une fonction prenant un $lltype$ en argument permettrait de r\'ecup\'erer le $lltype$ via $type\_of$. Or $type\_of$ retourne le type pointeur correspondant au type.
 
-\subsection{Autres}
+\subsection{If - Then - Else}
 
-Le test $tests/testlevel4/level4testfact.vsl$ fait une Segmentation fault \`a la compilation pour une raison inconnue.
+Le test $tests/testlevel4/level4testfact.vsl$ faisait une Segmentation fault \`a la compilation car le block du merge (sur lequel les deux branches du IF font une branchement quand elles ont fini) est vide et LLVM n'appr\'eciait pas. Nous avons r\'ecup\'er\'e la sortie, enlev\'e les messages d'erreur et le block vide, ce qui nous a permi de v\'erifier que le code fonctionnait bien. Pour \'eviter ce genre de probl\`emes, nous avons ajout\'e une instruction retournant -1 \`a la fin des fonction retournant des entiers (les fonctions retournant void avaient d\'ej\`a une instruction de ce type ajout\'e automatiquement).
 
 \section{Conclusion}
 

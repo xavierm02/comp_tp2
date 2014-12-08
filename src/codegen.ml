@@ -307,7 +307,7 @@ let gen_program_unit program_unit =
     SymbolTableList.close_scope();
     match typ with
     | Type_Void -> ignore(Llvm.build_ret_void builder)
-    | _ -> ()
+    | Type_Int -> ignore(Llvm.build_ret (const_int (-1)) builder)
 
 let gen_program program =
   SymbolTableList.open_scope();
