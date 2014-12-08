@@ -150,8 +150,8 @@ let rec gen_statement : statement -> unit = function
     let then_bb = Llvm.append_block context "then_bb" parent_bb in
     Llvm.position_at_end then_bb builder;
     ignore (gen_statement _then_statement);
-    assert (then_bb = Llvm.insertion_block builder);
-    let else_bb_option =
+    let then_bb_2 = Llvm.insertion_block builder in
+    let else_bb_1_and_2_option =
       match _else_statement with
       | Some _else_statement' ->
         begin
@@ -159,8 +159,8 @@ let rec gen_statement : statement -> unit = function
           let else_bb = Llvm.append_block context "else_bb" parent_bb in
           Llvm.position_at_end else_bb builder;
           ignore(gen_statement _else_statement');
-          assert (else_bb = Llvm.insertion_block builder);
-          Some else_bb
+          let else_bb_2 = Llvm.insertion_block builder in
+          Some (else_bb, else_bb_2)
         end
       | None -> None
     in
@@ -169,24 +169,50 @@ let rec gen_statement : statement -> unit = function
     (* start -> then | else *)
     Llvm.position_at_end start_bb builder;
     begin
-      match else_bb_option with
-        | Some else_bb -> ignore (Llvm.build_cond_br condition_bool then_bb else_bb builder)
+      match else_bb_1_and_2_option with
+        | Some (else_bb, _) -> ignore (Llvm.build_cond_br condition_bool then_bb else_bb builder)
         | None -> ignore (Llvm.build_cond_br condition_bool then_bb merge_bb builder)
     end;
     (* then -> merge *)
-    Llvm.position_at_end then_bb builder;
+    Llvm.position_at_end then_bb_2 builder;
     ignore (Llvm.build_br merge_bb builder);
     (* else -> merge *)
     begin
-      match else_bb_option with
-        | Some else_bb ->
-          Llvm.position_at_end else_bb builder;
+      match else_bb_1_and_2_option with
+        | Some (_, else_bb_2) ->
+          Llvm.position_at_end else_bb_2 builder;
           ignore (Llvm.build_br merge_bb builder)
         | None -> ()
     end;
     (* position *)
     Llvm.position_at_end merge_bb builder
-  | While (condition, statement) -> raise TODO
+  | While (_condition, statement) ->
+    (* condition *)
+    let condition = gen_expression _condition in
+    let condition_bool = Llvm.build_icmp Llvm.Icmp.Ne condition zero_int "icmp_tmp" builder in
+    (* blocks *)
+    let start_bb = Llvm.insertion_block builder in
+    let parent_bb = Llvm.block_parent start_bb in
+    (* test *)
+    let test_bb = Llvm.append_block context "test_bb" parent_bb in
+    (* body *)
+    let body_bb = Llvm.append_block context "body_bb" parent_bb in
+    Llvm.position_at_end body_bb builder;
+    ignore (gen_statement statement);
+    let body_bb_2 = Llvm.insertion_block builder in
+    (* out *)
+    let out_bb = Llvm.append_block context "out_bb" parent_bb in
+    (* start -> test *)
+    Llvm.position_at_end start_bb builder;
+    Llvm.build_br test_bb builder;
+    (* test -> body *)
+    Llvm.position_at_end test_bb builder;
+    ignore (Llvm.build_cond_br condition_bool body_bb out_bb builder);
+    (* body -> test *)
+    Llvm.position_at_end body_bb_2 builder;
+    ignore (Llvm.build_br test_bb builder);
+    (* position *)
+    Llvm.position_at_end out_bb builder
 
 let gen_program_unit program_unit =
   (* get proto *)
