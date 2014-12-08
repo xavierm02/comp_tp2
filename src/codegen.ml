@@ -91,21 +91,30 @@ let rec gen_expression : expression -> Llvm.llvalue = function
     Llvm.build_sdiv t1 t2 "sdiv_tmp" builder
   | Expr_Ident id ->
     let value = SymbolTableList.lookup id in (* TODO error message *)
-    if Llvm.type_of value <> Llvm.pointer_type int_type then
-      raise (Error (id ^ " is not an int!"))
-    else
+    let typ = Llvm.type_of value in
+    if typ = int_type then
+      value
+    else if typ = Llvm.pointer_type int_type then
       Llvm.build_load value id builder
-  | ArrayElem (id, e1) -> failwith "TODO"
+    else
+      raise (Error (id ^ " is not an int!"))
+  | ArrayElem (id, e1) -> failwith "TODO ARRAY ELEMENT"
     (* let t1 = gen_expression e1 in
     Llvm.build_extractvalue (SymbolTableList.lookup id) t1 "extractvalue_tmp" builder *) (* TODO error message *)
   | ECall (_callee, _args) ->
     let callee = SymbolTableList.lookup _callee in (* TODO error message *)
-    let args = Array.map gen_expression _args in
-    Llvm.build_call callee args "call_tmp" builder
+    let return_type = Llvm.return_type (Llvm.element_type (Llvm.type_of callee)) in
+    if return_type <> int_type then
+      raise (Error ("The function " ^ _callee
+      ^ " appears in an expression and therefore should have " ^ (Llvm.string_of_lltype int_type)
+      ^ " as return type but its return type it " ^ (Llvm.string_of_lltype return_type) ^ "!"))
+    else
+      let args = Array.map gen_expression _args in
+      Llvm.build_call callee args "call_tmp" builder
 
 let value_of_lhs = function (* TODO types *)
   | LHS_Ident id -> SymbolTableList.lookup id (* TODO error message *)
-  | LHS_ArrayElem _ -> raise TODO
+  | LHS_ArrayElem _ -> failwith "TODO ARRAY ELEMENT"
 
 let rec gen_statement : statement -> unit = function
   | Assign (lhs, expr) ->
@@ -113,7 +122,16 @@ let rec gen_statement : statement -> unit = function
     let storage = value_of_lhs lhs in
     ignore (Llvm.build_store value storage builder)
   | Return expr -> ignore(Llvm.build_ret (gen_expression expr) builder)
-  | SCall (callee, args) -> raise TODO
+  | SCall (_callee, _args) ->
+    let callee = SymbolTableList.lookup _callee in (* TODO error message *)
+    let return_type = Llvm.return_type (Llvm.element_type (Llvm.type_of callee)) in
+    if return_type <> void_type then
+      raise (Error ("The function " ^ _callee
+      ^ " appears as a statement and therefore should have " ^ (Llvm.string_of_lltype void_type)
+      ^ " as return type but its return type it " ^ (Llvm.string_of_lltype return_type) ^ "!"))
+    else
+      let args = Array.map gen_expression _args in
+      ignore (Llvm.build_call callee args "" builder)
   | Print items ->
     let formats = List.map (function
       | Print_Expr _ -> "%d"
@@ -213,7 +231,7 @@ let rec gen_statement : statement -> unit = function
     let out_bb = Llvm.append_block context "out_bb" parent_bb in
     (* start -> test *)
     Llvm.position_at_end start_bb builder;
-    Llvm.build_br test_bb builder;
+    ignore (Llvm.build_br test_bb builder);
     (* test -> body *)
     Llvm.position_at_end test_bb builder;
     ignore (Llvm.build_cond_br condition_bool body_bb out_bb builder);
