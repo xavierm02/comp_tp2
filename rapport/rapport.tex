@@ -32,17 +32,20 @@ La gestion de bloc semble assez simple. Il suffit d'utiliser les fonctions  $ope
 
 Nous avions dans un premier temps mal compris le fonctionnement de $gen\_expression$ et avions donc cr\'e\'e la valeur au tout debut du code et utilis\'ee lorsque l'on \'ecrivait le corps. Nous avons donc eu un bug : la condition n'\'etait \'evalu\'ee qu'une fois. Le code testant le WHILE dans le level 1 ne comprenant qu'un return, nous n'avons d\'etect\'e ce bug que sur l'exemple utilisant le WHILE et les tableaux du level 3 et avons donc longuement cherch\'e la source de la Segmentation fault dans les tableaux avant de remettre en cause notre impl\'ementation du WHILE. 
 
-\subsection{Les types} 
-
-Le seul bug a \'et\'e du \`a la v\'erification de type. Nous pensions qu'une $llvalue$ cr\'e\'ee avec une fonction prenant un $lltype$ en argument permettrait de r\'ecup\'erer le $lltype$ via $type\_of$. Or $type\_of$ retourne le type pointeur correspondant au type.
-
 \subsection{If - Then - Else}
 
 Le test $tests/testlevel4/level4testfact.vsl$ faisait une Segmentation fault \`a la compilation car le block du merge (sur lequel les deux branches du IF font une branchement quand elles ont fini) est vide et LLVM n'appr\'eciait pas. Nous avons r\'ecup\'er\'e la sortie, enlev\'e les messages d'erreur et le block vide, ce qui nous a permi de v\'erifier que le code fonctionnait bien. Pour \'eviter ce genre de probl\`emes, nous avons ajout\'e une instruction retournant -1 \`a la fin des fonction retournant des entiers (les fonctions retournant void avaient d\'ej\`a une instruction de ce type ajout\'ee automatiquement).
 
+
+\subsection{Les types} 
+
+Nous avons eu un premier bus car nous pensions qu'une $llvalue$ cr\'e\'ee avec une fonction prenant un $lltype$ en argument permettrait de r\'ecup\'erer le $lltype$ via $type\_of$. Or $type\_of$ retourne le type pointeur correspondant au type.
+
+Notre second bug, qui est pr\'esent dans le rendu final, vient du fait que l'infomation de type extrainte d'un $llvalue$ ne permet pas (\`a notre connaissance) de d\'eterminer si le type est un type tableau ou un type pointeur. De ce fait, la d\'etection d'erreurs de types ne fonctionne pas entre certains entiers et les tableaux d'entiers. Pour \'eviter ce probl\`eme, il aurait fallu stocker des couples $llvalue * type$ dans SymbolTableList.
+
 \section{Conclusion}
 
-Notre compilateur gère les fonctionnalités du langage VSL+ souhaités et passe tous les tests.
+Notre compilateur gère les fonctionnalités du langage VSL+ souhaités et passe tous les tests mais ne d\'etecte pas toutes les erreurs.
 
 Ce projet nous à permit de nous confronter à la génération automatique de code. 
 Néanmoins ce projet ne nous fait réaliser qu'une partie d'un vrai compilateur. Nous aurions pu par exemple nous intéresser à l'optimisation du code compilé à l'aide des méthodes vues en cours.
